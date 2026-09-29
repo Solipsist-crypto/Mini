@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <!-- Спеціальні мета-теги для Apple (щоб працювало як нативний додаток) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Для Снежи">
+    
+    <title>Для Снежи</title>
+    
+    <!-- Підключення красивого шрифту для імені -->
+    <link href="https://fonts.googleapis.com/css2?family=Marck+Script&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #050014; /* Глибокий космічний колір */
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+        }
+
+        #starsCanvas, #drawCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #starsCanvas {
+            z-index: 1;
+        }
+
+        #drawCanvas {
+            z-index: 2;
+            transition: opacity 2s ease-in-out;
+        }
+
+        /* Стилі для кнопки Начать */
+        #startBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            padding: 16px 40px;
+            font-size: 22px;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: all 0.4s ease;
+            box-shadow: 0 0 20px rgba(255, 20, 147, 0.4);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        #startBtn:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        /* Стилі для імені Снежа */
+        #nameOverlay {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            z-index: 3;
+            font-family: 'Marck Script', cursive;
+            font-size: 80px;
+            color: #fff;
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            transition: opacity 2s ease-out, transform 2s ease-out;
+            pointer-events: none;
+        }
+
+        /* Класи для керування видимістю */
+        .hidden-fade {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        .show-name {
+            opacity: 1 !important;
+            transform: translateY(0) scale(1) !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas для зірок -->
+    <canvas id="starsCanvas"></canvas>
+    
+    <!-- Canvas для малювання серця і пульсу -->
+    <canvas id="drawCanvas"></canvas>
+
+    <!-- Текст з іменем -->
+    <div id="nameOverlay">Снежа кохаю дуже сильно</div>
+
+    <!-- Кнопка старту -->
+    <button id="startBtn">Начать</button>
+
+    <script>
+        const starsCanvas = document.getElementById('starsCanvas');
+        const drawCanvas = document.getElementById('drawCanvas');
+        const startBtn = document.getElementById('startBtn');
+        const nameOverlay = document.getElementById('nameOverlay');
+
+        const starCtx = starsCanvas.getContext('2d');
+        const ctx = drawCanvas.getContext('2d');
+
+        let width, height;
+        
+        // Масив неонових кольорів для циклу
+        const colors = [
+            '#ff0055', // Неоново-рожевий
+            '#00e5ff', // Блакитний
+            '#b300ff', // Фіолетовий
+            '#39ff14', // Кислотно-зелений
+            '#ffea00'  // Золотий
+        ];
+        let colorCycle = 0;
+        
+        let points = [];
+        let currentIndex = 0;
+        let animationFrameId = null;
+        let ekgStartY = 0;
+
+        // Швидкість лазера (крапок за кадр)
+        const drawSpeed = 6; 
+
+        // Оновлення розмірів екрану
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            starsCanvas.width = width;
+            starsCanvas.height = height;
+            drawCanvas.width = width;
+            drawCanvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // ------------------ ЗОРЯНЕ НЕБО ------------------
+        const stars = [];
+        for (let i = 0; i < 150; i++) {
+            stars.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                r: Math.random() * 1.5 + 0.5,
+                alpha: Math.random(),
+                pulse: (Math.random() * 0.015) + 0.005,
+                color: Math.random() > 0.8 ? '#ffe9c4' : '#ffffff' // Трохи золотистих зірок
+            });
+        }
+
+        function animateStars() {
+            starCtx.clearRect(0, 0, width, height);
+            for (let s of stars) {
+                s.alpha += s.pulse;
+                if (s.alpha >= 1 || s.alpha <= 0.1) {
+                    s.pulse = -s.pulse;
+                }
+                starCtx.beginPath();
+                starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                starCtx.fillStyle = s.color;
+                starCtx.globalAlpha = Math.max(0, Math.min(1, s.alpha));
+                starCtx.fill();
+            }
+            starCtx.globalAlpha = 1; // Скидання
+            requestAnimationFrame(animateStars);
+        }
+        animateStars();
+
+        // ------------------ ГЕНЕРАЦІЯ МАРШРУТУ (МАТЕМАТИКА) ------------------
+        function generatePath() {
+            points = [];
+            
+            // Масштаб залежить від екрану телефону
+            let scale = Math.min(width, height) / 45;
+            let cx = width / 2;
+            let cy = height / 2 - 60; // Зсув вгору, щоб було місце для пульсу
+
+            // 1. Ліва половина серця (від низу до центру)
+            for (let t = Math.PI; t <= 2 * Math.PI; t += 0.02) {
+                let px = cx + 16 * Math.pow(Math.sin(t), 3) * scale;
+                let py = cy - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * scale;
+                points.push({ x: px, y: py, draw: true });
+            }
+
+            // 2. Права половина серця (від центру до низу)
+            for (let t = 0; t <= Math.PI; t += 0.02) {
+                let px = cx + 16 * Math.pow(Math.sin(t), 3) * scale;
+                let py = cy - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * scale;
+                points.push({ x: px, y: py, draw: true });
+            }
+
+            // Розрахунок нижньої точки серця
+            let bottomY = cy - (13 * Math.cos(Math.PI) - 5 * Math.cos(2 * Math.PI) - 2 * Math.cos(3 * Math.PI) - Math.cos(4 * Math.PI)) * scale;
+
+            // 3. Стрибок лазера на початок кардіограми
+            ekgStartY = bottomY + 50;
+            let ekgStartX = cx - Math.min(width / 2.2, 160); // Адаптивна ширина для телефону
+            
+            points.push({ x: ekgStartX, y: ekgStartY, draw: false });
+
+            // 4. Точки кардіограми (EKG)
+            let ekgPts = [
+                { x: cx - 140, y: ekgStartY },
+                { x: cx - 80,  y: ekgStartY },
+                { x: cx - 65,  y: ekgStartY - 15 }, // Зубець P
+                { x: cx - 50,  y: ekgStartY },
+                { x: cx - 35,  y: ekgStartY },
+                { x: cx - 20,  y: ekgStartY + 25 }, // Зубець Q (вниз)
+                { x: cx,       y: ekgStartY - 80 }, // Зубець R (високий вгору)
+                { x: cx + 20,  y: ekgStartY + 35 }, // Зубець S (глибоко вниз)
+                { x: cx + 35,  y: ekgStartY },
+                { x: cx + 55,  y: ekgStartY },
+                { x: cx + 75,  y: ekgStartY - 20 }, // Зубець T
+                { x: cx + 95,  y: ekgStartY },
+                { x: cx + 140, y: ekgStartY }
+            ];
+
+            // Адаптуємо координати X під екран (щоб не вилізло за межі)
+            let ratio = Math.min(width * 0.8 / 280, 1);
+            ekgPts = ekgPts.map(p => ({
+                x: cx + (p.x - cx) * ratio,
+                y: p.y
+            }));
+
+            // Плавно з'єднуємо точки EKG, щоб лазер малював їх з однаковою швидкістю
+            for (let i = 0; i < ekgPts.length - 1; i++) {
+                let p1 = ekgPts[i];
+                let p2 = ekgPts[i+1];
+                let dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                let steps = Math.max(1, Math.floor(dist / 2)); // Щільність точок
+                
+                for (let j = 1; j <= steps; j++) {
+                    points.push({
+                        x: p1.x + (p2.x - p1.x) * (j / steps),
+                        y: p1.y + (p2.y - p1.y) * (j / steps),
+                        draw: true
+                    });
+                }
+            }
+        }
+
+        // ------------------ АНІМАЦІЯ МАЛЮВАННЯ ------------------
+        function drawAnimation() {
+            ctx.clearRect(0, 0, width, height);
+            
+            let currentColor = colors[colorCycle % colors.length];
+
+            // Налаштування "неонового" пензля
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = currentColor;
+
+            ctx.beginPath();
+            let isDrawing = false;
+
+            // Малюємо весь пройдений шлях
+            for (let i = 0; i < currentIndex; i++) {
+                let p = points[i];
+                if (!p.draw) {
+                    isDrawing = false;
+                } else {
+                    if (!isDrawing) {
+                        ctx.moveTo(p.x, p.y);
+                        isDrawing = true;
+                    } else {
+                        ctx.lineTo(p.x, p.y);
+                    }
+                }
+            }
+            ctx.stroke();
+
+            // Малюємо яскравий "лазерний промінь" на кінці
+            if (currentIndex > 0 && currentIndex < points.length && points[currentIndex - 1].draw) {
+                let p = points[currentIndex - 1];
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = currentColor;
+                ctx.fill();
+            }
+
+            currentIndex += drawSpeed;
+
+            // Продовжуємо чи завершуємо
+            if (currentIndex < points.length) {
+                animationFrameId = requestAnimationFrame(drawAnimation);
+            } else {
+                finishCycle(currentColor);
+            }
+        }
+
+        // ------------------ КЕРУВАННЯ СЦЕНАРІЄМ ------------------
+        function finishCycle(color) {
+            // Розташовуємо ім'я рівно над кардіограмою
+            nameOverlay.style.top = (ekgStartY - 110) + 'px';
+            
+            // Додаємо світіння до імені відповідно до поточного кольору
+            nameOverlay.style.textShadow = `0 0 10px ${color}, 0 0 20px ${color}, 0 0 40px ${color}, 0 0 80px ${color}`;
+            
+            // Плавно показуємо ім'я
+            nameOverlay.classList.add('show-name');
+
+            // Чекаємо 4 секунди, щоб вона помилувалася, потім починаємо магію заново
+            setTimeout(() => {
+                // Згасання
+                drawCanvas.style.opacity = '0';
+                nameOverlay.classList.remove('show-name');
+                
+                setTimeout(() => {
+                    // Зміна кольору і старт нового кола
+                    colorCycle++;
+                    drawCanvas.style.opacity = '1';
+                    startMagic();
+                }, 2000); // Час на розчинення
+
+            }, 4000); // Час показу
+        }
+
+        function startMagic() {
+            generatePath();
+            currentIndex = 0;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            drawAnimation();
+        }
+
+        // Обробка натискання кнопки "Начать"
+        startBtn.addEventListener('click', () => {
+            startBtn.classList.add('hidden-fade');
+            
+            // Якщо браузер дозволяє - перехід у повноекранний режим (додатково)
+            if(document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(err => console.log(err));
+            }
+            
+            // Даємо час кнопці зникнути
+            setTimeout(() => {
+                startMagic();
+            }, 500);
+        });
+
+    </script>
+</body>
+</html>
